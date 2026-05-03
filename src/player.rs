@@ -79,6 +79,7 @@ impl Player {
 
         self.sink.append(source);
         self.sink.set_volume(if self.muted { 0.0 } else { self.volume });
+        self.sink.play();
 
         self.current_track = Some(track.clone());
         self.state = PlayState::Playing;
