@@ -583,10 +583,8 @@ impl App {
         };
 
         if let Some(track) = &self.player.current_track {
-            state.metadata.track_id = format!(
-                "/org/mpris/MediaPlayer2/opal/{}",
-                track.path.to_string_lossy()
-            );
+            state.metadata.track_id =
+                crate::mpris::track_id_from_path(&track.path);
             state.metadata.title = track.title.clone();
             state.metadata.artist = if track.artist.is_empty() {
                 vec![]

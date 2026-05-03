@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 use zbus::zvariant::{ObjectPath, Value};
@@ -61,6 +62,14 @@ impl MprisShared {
     fn push_command(&self, action: MprisAction) {
         self.commands.lock().unwrap().push(action);
     }
+}
+
+/// Generate a valid D-Bus object path segment from an arbitrary file path
+/// by using its hash.  Object paths only allow [A-Z][a-z][0-9]_/ characters.
+pub fn track_id_from_path(path: &std::path::Path) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    format!("/org/mpris/MediaPlayer2/opal/{}", hasher.finish())
 }
 
 // ── org.mpris.MediaPlayer2 (root) ──────────────────────────────────────
@@ -291,38 +300,42 @@ pub fn start_mpris(shared: Arc<MprisShared>) {
                 .expect("build mpris tokio runtime");
 
             rt.block_on(async move {
+                let conn = match zbus::ConnectionBuilder::session() {
+                    Ok(builder) => match builder.name("org.mpris.MediaPlayer2.opal") {
+                        Ok(builder) => match builder.build().await {
+                            Ok(conn) => conn,
+                            Err(e) => {
+                                log_mpris(&format!("build: {e}"));
+                                return;
+                            }
+                        },
+                        Err(e) => {
+                            log_mpris(&format!("name: {e}"));
+                            return;
+                        }
+                    },
+                    Err(e) => {
+                        log_mpris(&format!("session: {e}"));
+                        return;
+                    }
+                };
+
                 let root = OpalMprisRoot {
                     shared: shared.clone(),
                 };
                 let player = OpalMprisPlayer { shared };
 
-                let conn = zbus::ConnectionBuilder::session()
-                    .ok()
-                    .and_then(|b| {
-                        b.name("org.mpris.MediaPlayer2.opal")
-                            .ok()
-                            .and_then(|b| {
-                                b.serve_at("/org/mpris/MediaPlayer2", root)
-                                    .ok()
-                                    .and_then(|b| {
-                                        b.serve_at("/org/mpris/MediaPlayer2", player).ok()
-                                    })
-                            })
-                    });
+                let obj_path = "/org/mpris/MediaPlayer2";
+                if let Err(e) = conn.object_server().at(obj_path, root).await {
+                    log_mpris(&format!("root interface: {e}"));
+                    return;
+                }
+                if let Err(e) = conn.object_server().at(obj_path, player).await {
+                    log_mpris(&format!("player interface: {e}"));
+                    return;
+                }
 
-                let _conn = match conn {
-                    Some(b) => match b.build().await {
-                        Ok(c) => c,
-                        Err(e) => {
-                            eprintln!("MPRIS: failed to build connection: {e}");
-                            return;
-                        }
-                    },
-                    None => {
-                        eprintln!("MPRIS: no session bus available");
-                        return;
-                    }
-                };
+                log_mpris("MPRIS server started");
 
                 // Keep alive
                 loop {
@@ -331,4 +344,15 @@ pub fn start_mpris(shared: Arc<MprisShared>) {
             });
         })
         .expect("spawn mpris thread");
+}
+
+fn log_mpris(msg: &str) {
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/tmp/opal-mpris.log")
+        .map(|mut f| {
+            use std::io::Write;
+            let _ = writeln!(f, "[MPRIS] {msg}");
+        });
 }
