@@ -7,24 +7,13 @@ use rodio::source::Source as RodioSource;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::DecoderOptions;
-use symphonia::core::formats::{FormatOptions, SeekMode, SeekTo};
+use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
-use symphonia::core::units::Time;
 
 use crate::error::Result;
 use crate::library::TrackInfo;
-
-/// Convert seconds as f64 to a symphonia Time.
-fn time_from_secs_f64(secs: f64) -> Time {
-    let whole = secs as u64;
-    let h = (whole / 3600) as u32;
-    let m = ((whole % 3600) / 60) as u8;
-    let s = (whole % 60) as u8;
-    let ns = ((secs - secs.floor()) * 1_000_000_000.0) as u32;
-    Time::from_hhmmss(h, m, s, ns).unwrap_or_else(|| Time::from_ss(s, ns).unwrap())
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepeatMode {
@@ -263,12 +252,11 @@ impl SymphoniaSource {
             .default_track()
             .ok_or_else(|| crate::error::AppError::Decode("no default track".into()))?;
 
-        let track_id = track.id;
         let sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
         let channels = track.codec_params.channels.map(|c| c.count() as u16).unwrap_or(2);
         let codec_params = track.codec_params.clone();
 
-        // Duration
+        // Duration from metadata
         let duration = track
             .codec_params
             .time_base
@@ -279,25 +267,13 @@ impl SymphoniaSource {
                 })
             });
 
-        // Seek if requested
-        if let Some(seek_secs) = seek_to {
-            if seek_secs > 0.0 {
-                let _ = format.seek(
-                    SeekMode::Accurate,
-                    SeekTo::Time {
-                        time: time_from_secs_f64(seek_secs),
-                        track_id: Some(track_id),
-                    },
-                );
-            }
-        }
-
         let mut decoder = symphonia::default::get_codecs().make(
             &codec_params,
             &DecoderOptions::default(),
         )
         .map_err(|e| crate::error::AppError::Decode(e.to_string()))?;
 
+        // Decode the entire file into memory
         let mut all_samples = Vec::new();
 
         loop {
@@ -319,12 +295,24 @@ impl SymphoniaSource {
             all_samples.extend_from_slice(sample_buf.samples());
         }
 
+        // Calculate seek offset in samples (always decode full file, then skip)
+        let position = if let Some(seek_secs) = seek_to {
+            if seek_secs > 0.0 {
+                let offset = (seek_secs * sample_rate as f64 * channels as f64) as usize;
+                offset.min(all_samples.len())
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
         Ok(Self {
             channels,
             sample_rate,
             duration,
             samples: all_samples,
-            position: 0,
+            position,
         })
     }
 }
