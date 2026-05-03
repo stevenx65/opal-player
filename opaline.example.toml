@@ -1,0 +1,50 @@
+# Opaline Theme Configuration
+# Place this file at ~/.config/opal-tui/config.toml
+# Colors are hex RGB values.
+
+[theme_overrides]
+# Background
+bg = "1a1b26"
+surface = "24283b"
+surface_alt = "2f334d"
+
+# Primary accent (soft coral/pink)
+primary = "f0c0c0"
+
+# Secondary accent (pale teal)
+secondary = "b4f9f8"
+
+# Additional accent (soft lavender)
+accent = "cbc0ff"
+
+# Text colors
+text = "c0caf5"
+text_dim = "565f89"
+text_bright = "ffffff"
+
+# Semantic colors
+success = "9ece6a"
+warning = "e0af68"
+error = "f7768e"
+
+# Progress bar
+progress = "f0c0c0"
+progress_bg = "414568"
+
+# Borders and highlights
+border = "565f89"
+highlight = "f0c0c0"
+highlight_bg = "363b54"
+
+# Player settings
+volume = 0.8
+muted = false
+shuffle = false
+repeat_mode = "off"
+
+# Directories to scan on startup
+music_dirs = [
+    "~/Music"
+]
+
+scan_on_startup = true

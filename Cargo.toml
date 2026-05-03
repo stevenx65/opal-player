@@ -1,0 +1,20 @@
+[package]
+name = "opal-tui"
+version = "0.1.0"
+edition = "2021"
+description = "A modern, minimal TUI music player with an opaline theme"
+
+[dependencies]
+ratatui = "0.28"
+crossterm = "0.28"
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "signal"] }
+rodio = "0.20"
+symphonia = { version = "0.5", features = ["all"] }
+lofty = "0.21"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+anyhow = "1"
+thiserror = "2"
+dirs = "6"
+unicode-width = "0.2"
