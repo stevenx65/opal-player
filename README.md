@@ -8,6 +8,7 @@
 
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![AUR](https://img.shields.io/badge/AUR-opal--tui-blue)](https://aur.archlinux.org/packages/opal-tui)
 
 </div>
 
@@ -124,6 +125,15 @@ sudo dnf install alsa-lib-devel
 ```
 
 ### Install | 安装
+
+**Arch Linux (AUR):**
+
+```bash
+paru -S opal-tui
+# or: yay -S opal-tui
+```
+
+**From source:**
 
 ```bash
 git clone https://github.com/stevenx65/opal-tui.git
