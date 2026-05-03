@@ -26,13 +26,21 @@ fn main() -> anyhow::Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, crossterm::cursor::Hide)?;
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        crossterm::cursor::Hide,
+        crossterm::event::EnableMouseCapture
+    )?;
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
     // Create app
     let mut app = App::new()?;
+
+    // UI layout tracking (separate from app so terminal.draw can borrow both)
+    let mut ui_layout = crate::app::UiLayout::default();
 
     // If music dirs are configured, scan them
     let music_dirs: Vec<String> = app.config.music_dirs.clone();
@@ -51,7 +59,7 @@ fn main() -> anyhow::Result<()> {
     // Main event loop
     let tick_rate = Duration::from_millis(16); // ~60fps
     loop {
-        terminal.draw(|f| ui::render(f, &app))?;
+        terminal.draw(|f| ui::render(f, &app, &mut ui_layout))?;
 
         if !app.running {
             break;
@@ -59,11 +67,20 @@ fn main() -> anyhow::Result<()> {
 
         // Poll for events with timeout
         if event::poll(tick_rate)? {
-            if let Event::Key(key_event) = event::read()? {
-                if let Err(e) = app.handle_event(&key_event) {
-                    app.status_msg = format!("Error: {}", e);
-                    app.status_timer = 120;
+            match event::read()? {
+                Event::Key(key_event) => {
+                    if let Err(e) = app.handle_event(&key_event) {
+                        app.status_msg = format!("Error: {}", e);
+                        app.status_timer = 120;
+                    }
                 }
+                Event::Mouse(mouse_event) => {
+                    if let Err(e) = app.handle_mouse(mouse_event, &ui_layout) {
+                        app.status_msg = format!("Error: {}", e);
+                        app.status_timer = 120;
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -78,7 +95,8 @@ fn main() -> anyhow::Result<()> {
     execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
-        crossterm::cursor::Show
+        crossterm::cursor::Show,
+        crossterm::event::DisableMouseCapture
     )?;
 
     Ok(())

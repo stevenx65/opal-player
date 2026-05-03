@@ -115,30 +115,37 @@ impl Player {
         self.total_duration = None;
     }
 
-    /// Single-step seek.  Ignored if a seek is already in progress or no
-    /// track is loaded, so buffered / repeat key events are harmless.
+    /// Delta seek (± seconds).  Ignored if a seek is already in progress or
+    /// no track is loaded.
     pub fn seek(&mut self, delta_secs: f64) -> Result<()> {
         if self.seeking || self.current_track.is_none() {
             return Ok(());
         }
-
         let current_pos = self.get_elapsed();
         let total = self.total_duration.unwrap_or(Duration::from_secs(300));
-        let new_pos_secs = (current_pos.as_secs_f64() + delta_secs)
+        let target = (current_pos.as_secs_f64() + delta_secs)
             .max(0.0)
             .min(total.as_secs_f64());
+        self.seek_to(target)
+    }
+
+    /// Absolute seek to a position in seconds.
+    pub fn seek_to(&mut self, seconds: f64) -> Result<()> {
+        if self.seeking || self.current_track.is_none() {
+            return Ok(());
+        }
 
         self.seeking = true;
 
         let was_playing = self.state == PlayState::Playing;
         let path = self.current_track.as_ref().unwrap().path.clone();
-        let source = SymphoniaSource::new_with_seek(&path, new_pos_secs)?;
+        let source = SymphoniaSource::new_with_seek(&path, seconds)?;
 
         self.sink.stop();
         self.sink.append(source);
         self.sink.set_volume(if self.muted { 0.0 } else { self.volume });
 
-        self.accumulated_elapsed = Duration::from_secs_f64(new_pos_secs);
+        self.accumulated_elapsed = Duration::from_secs_f64(seconds);
         self.play_start = if was_playing { Some(Instant::now()) } else { None };
 
         if !was_playing {

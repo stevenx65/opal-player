@@ -8,11 +8,11 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{App, FocusedPanel, TabView};
+use crate::app::{App, FocusedPanel, TabView, UiLayout};
 use crate::player::{PlayState, RepeatMode};
 use crate::theme::OpalineTheme;
 
-pub fn render(f: &mut Frame, app: &App) {
+pub fn render(f: &mut Frame, app: &App, layout: &mut UiLayout) {
     let theme = &app.theme;
 
     let area = f.area();
@@ -34,7 +34,7 @@ pub fn render(f: &mut Frame, app: &App) {
     if app.show_help {
         render_help(f, main_layout[1], theme);
     } else {
-        render_content(f, app, main_layout[1], theme);
+        render_content(f, app, main_layout[1], theme, layout);
     }
 
     render_status_bar(f, app, main_layout[2], theme);
@@ -119,10 +119,9 @@ fn render_title_bar(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme) 
     f.render_widget(Paragraph::new(row3).alignment(Alignment::Left), title_layout[2]);
 }
 
-fn render_content(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme) {
+fn render_content(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme, layout: &mut UiLayout) {
     match app.active_tab {
         TabView::Library | TabView::NowPlaying => {
-            // Three-panel layout
             let panels = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
@@ -132,9 +131,9 @@ fn render_content(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme) {
                 ])
                 .split(area);
 
-            render_library_panel(f, app, panels[0], theme);
-            render_now_playing(f, app, panels[1], theme);
-            render_queue_panel(f, app, panels[2], theme);
+            render_library_panel(f, app, panels[0], theme, layout);
+            render_now_playing(f, app, panels[1], theme, layout);
+            render_queue_panel(f, app, panels[2], theme, layout);
         }
         TabView::Playlists => {
             let panels = Layout::default()
@@ -155,13 +154,13 @@ fn render_content(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme) {
                     Constraint::Percentage(50),
                 ])
                 .split(area);
-            render_library_panel(f, app, panels[0], theme);
-            render_queue_panel(f, app, panels[1], theme);
+            render_library_panel(f, app, panels[0], theme, layout);
+            render_queue_panel(f, app, panels[1], theme, layout);
         }
     }
 }
 
-fn render_library_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme) {
+fn render_library_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme, layout: &mut UiLayout) {
     let is_focused = app.is_library_focused();
     let border_style = if is_focused {
         Style::default().fg(theme.primary)
@@ -177,6 +176,7 @@ fn render_library_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineThe
 
     let inner = block.inner(area);
     f.render_widget(block, area);
+    layout.library_list = inner;
 
     if app.library.is_loading {
         let loading = Paragraph::new("Scanning...")
@@ -272,7 +272,7 @@ fn render_library_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineThe
     f.render_widget(list, inner);
 }
 
-fn render_now_playing(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme) {
+fn render_now_playing(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme, layout: &mut UiLayout) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(theme.border))
@@ -347,6 +347,8 @@ fn render_now_playing(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme
             0.0
         };
 
+        layout.progress_bar = now_layout[1];
+
         let gauge = Gauge::default()
             .block(Block::default())
             .gauge_style(Style::default().fg(theme.progress).bg(theme.progress_bg))
@@ -416,7 +418,7 @@ fn render_now_playing(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme
     }
 }
 
-fn render_queue_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme) {
+fn render_queue_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme, layout: &mut UiLayout) {
     let is_focused = app.focused_panel == FocusedPanel::Queue;
     let border_style = if is_focused {
         Style::default().fg(theme.primary)
@@ -433,6 +435,7 @@ fn render_queue_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme
 
     let inner = block.inner(area);
     f.render_widget(block, area);
+    layout.queue_list = inner;
 
     if app.playlist_manager.queue.is_empty() {
         let empty = Paragraph::new("Queue is empty\n\n'a' to add tracks\n'd' to remove")

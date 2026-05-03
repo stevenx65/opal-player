@@ -25,6 +25,7 @@
 | 🎨 Opaline theme engine — soft pastel-on-dark palette | Opaline 主题引擎 — 柔和蛋白石配色 |
 | ⚙️ Persistent config (volume, queue, theme, position) | 持久化配置（音量、队列、主题、播放位置） |
 | ⌨️ Full keyboard control with help popup (`?`) | 全键盘操作，`?` 弹出帮助 |
+| 🖱️ Mouse support — click tracks to play, drag progress bar | 鼠标支持 — 点击曲目播放，点击进度条跳转 |
 
 ## 🖼️ Screenshot | 截图
 
@@ -78,6 +79,17 @@
 | `Tab` | Switch panel focus | 切换面板焦点 |
 | `1`–`4` | Switch tab view | 切换标签页 |
 | `?` | Toggle help | 切换帮助 |
+
+## 🖱️ Mouse Controls | 鼠标操作
+
+| Action | 操作 |
+|--------|------|
+| Click track in Library | Select and play the track |
+| 点击库中的曲目 | 选中并播放曲目 |
+| Click entry in Queue | Select and play the queued track |
+| 点击队列中的条目 | 选中并播放队列中的曲目 |
+| Click progress bar | Seek to that position |
+| 点击进度条 | 跳转到对应播放位置 |
 
 ## 🚀 Quick Start | 快速开始
 

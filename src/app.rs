@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
+use ratatui::layout::Rect;
 
 use crate::config::Config;
 use crate::error::Result;
@@ -25,6 +26,27 @@ pub enum TabView {
     Playlists,
     Queue,
     NowPlaying,
+}
+
+/// Areas of clickable UI elements, populated by the render pass.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UiLayout {
+    pub library_list: Rect,
+    pub queue_list: Rect,
+    pub progress_bar: Rect,
+}
+
+fn scroll_offset_for(total: usize, selected: usize, visible_rows: usize) -> usize {
+    if total <= visible_rows {
+        0
+    } else {
+        let half = visible_rows / 2;
+        if selected > half {
+            (selected - half).min(total - visible_rows)
+        } else {
+            0
+        }
+    }
 }
 
 pub struct App {
@@ -98,6 +120,85 @@ impl App {
         };
 
         self.execute_action(action)
+    }
+
+    pub fn handle_mouse(&mut self, event: MouseEvent, layout: &UiLayout) -> Result<()> {
+        if event.kind != MouseEventKind::Down(MouseButton::Left) {
+            return Ok(());
+        }
+
+        let (col, row) = (event.column, event.row);
+
+        // ── Progress bar click → seek ──
+        let pb = layout.progress_bar;
+        if row == pb.y && col >= pb.x && col < pb.x + pb.width {
+            let ratio = (col - pb.x) as f64 / pb.width.saturating_sub(1) as f64;
+            let ratio = ratio.clamp(0.0, 1.0);
+            if let Some(total) = self.player.total_duration {
+                let target = total.as_secs_f64() * ratio;
+                let _ = self.player.seek_to(target);
+                self.set_status(&format!("Seeked to {:.0}s", target));
+            }
+            return Ok(());
+        }
+
+        // ── Library list click → select + play ──
+        let lib = layout.library_list;
+        if col >= lib.x && col < lib.x + lib.width && row >= lib.y && row < lib.y + lib.height {
+            let rel_row = (row - lib.y) as usize;
+            let total = self.library.filtered_indices.len();
+            let visible_rows = (lib.height as usize).saturating_sub(2);
+            if visible_rows == 0 || total == 0 {
+                return Ok(());
+            }
+            let scroll_offset = scroll_offset_for(total, self.library.selected_index, visible_rows);
+            let target_idx = scroll_offset + rel_row;
+            if target_idx < total {
+                self.library.selected_index = target_idx;
+                self.focused_panel = FocusedPanel::Library;
+                // Play on click
+                if let Some(track) = self.library.selected_track() {
+                    self.play_track(&track)?;
+                }
+            }
+            return Ok(());
+        }
+
+        // ── Queue list click → select + play ──
+        let q = layout.queue_list;
+        if col >= q.x && col < q.x + q.width && row >= q.y && row < q.y + q.height {
+            let rel_row = (row - q.y) as usize;
+            let total = self.playlist_manager.queue.len();
+            let visible_rows = (q.height as usize).saturating_sub(2);
+            if visible_rows == 0 || total == 0 {
+                return Ok(());
+            }
+            let scroll_offset = scroll_offset_for(total, self.playlist_manager.selected_queue_index, visible_rows);
+            let target_idx = scroll_offset + rel_row;
+            if target_idx < total {
+                self.playlist_manager.selected_queue_index = target_idx;
+                self.focused_panel = FocusedPanel::Queue;
+                let entry = self.playlist_manager.queue.remove(target_idx);
+                self.playlist_manager.selected_queue_index = self
+                    .playlist_manager
+                    .selected_queue_index
+                    .min(self.playlist_manager.queue.len().saturating_sub(1));
+                let path = entry.path.clone();
+                let info = MusicLibrary::read_metadata_file(&path).unwrap_or_else(|_| TrackInfo {
+                    path,
+                    title: entry.title,
+                    artist: entry.artist,
+                    album: String::new(),
+                    duration: entry.duration_secs.map(Duration::from_secs_f64),
+                    track_number: None,
+                    genre: None,
+                });
+                self.play_track(&info)?;
+            }
+            return Ok(());
+        }
+
+        Ok(())
     }
 
     fn handle_search_input(&mut self, event: &KeyEvent) -> Result<()> {
