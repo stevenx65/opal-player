@@ -122,11 +122,33 @@ impl App {
 
             Action::PlayPause => self.player.play_pause(),
 
-            Action::PlaySelected => {
-                if let Some(track) = self.library.selected_track() {
-                    self.play_track(&track)?;
+            Action::PlaySelected => match self.focused_panel {
+                FocusedPanel::Queue => {
+                    let idx = self.playlist_manager.selected_queue_index;
+                    if let Some(entry) = self.playlist_manager.queue.get(idx).cloned() {
+                        self.playlist_manager.queue.remove(idx);
+                        self.playlist_manager.selected_queue_index =
+                            idx.min(self.playlist_manager.queue.len().saturating_sub(1));
+                        let path = entry.path.clone();
+                        let info = MusicLibrary::read_metadata_file(&path)
+                            .unwrap_or_else(|_| TrackInfo {
+                                path,
+                                title: entry.title,
+                                artist: entry.artist,
+                                album: String::new(),
+                                duration: entry.duration_secs.map(Duration::from_secs_f64),
+                                track_number: None,
+                                genre: None,
+                            });
+                        self.play_track(&info)?;
+                    }
                 }
-            }
+                _ => {
+                    if let Some(track) = self.library.selected_track() {
+                        self.play_track(&track)?;
+                    }
+                }
+            },
 
             Action::Stop => {
                 self.player.stop();
@@ -280,16 +302,15 @@ impl App {
     }
 
     fn play_track(&mut self, track: &TrackInfo) -> Result<()> {
-        // If this track is at the front of the queue, consume it now so that
-        // play_next won't replay it when the track finishes.
-        if self
+        // Remove this track from the queue if present — it's being played now,
+        // so play_next should not replay it later.
+        if let Some(pos) = self
             .playlist_manager
             .queue
-            .first()
-            .map(|e| e.path == track.path)
-            .unwrap_or(false)
+            .iter()
+            .position(|e| e.path == track.path)
         {
-            self.playlist_manager.queue.remove(0);
+            self.playlist_manager.queue.remove(pos);
             self.playlist_manager.selected_queue_index = self
                 .playlist_manager
                 .selected_queue_index
