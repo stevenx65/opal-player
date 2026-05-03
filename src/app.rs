@@ -280,6 +280,22 @@ impl App {
     }
 
     fn play_track(&mut self, track: &TrackInfo) -> Result<()> {
+        // If this track is at the front of the queue, consume it now so that
+        // play_next won't replay it when the track finishes.
+        if self
+            .playlist_manager
+            .queue
+            .first()
+            .map(|e| e.path == track.path)
+            .unwrap_or(false)
+        {
+            self.playlist_manager.queue.remove(0);
+            self.playlist_manager.selected_queue_index = self
+                .playlist_manager
+                .selected_queue_index
+                .min(self.playlist_manager.queue.len().saturating_sub(1));
+        }
+
         self.lyrics = Lyrics::find_for_audio(&track.path);
         self.player.play_file(track)?;
         self.set_status(&format!("Now playing: {}", track.display_name()));
