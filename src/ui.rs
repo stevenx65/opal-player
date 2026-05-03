@@ -194,15 +194,36 @@ fn render_library_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineThe
         return;
     }
 
-    // Build list items with scrolling
-    let items: Vec<ListItem> = app
-        .library
-        .filtered_indices
+    let visible_rows = (inner.height as usize).saturating_sub(2);
+    if visible_rows == 0 {
+        return;
+    }
+
+    let total = app.library.filtered_indices.len();
+    let sel = app.library.selected_index;
+
+    // Compute scroll_offset so selected item is centered when possible
+    let scroll_offset = if total <= visible_rows {
+        0
+    } else {
+        let half = visible_rows / 2;
+        if sel > half {
+            (sel - half).min(total - visible_rows)
+        } else {
+            0
+        }
+    };
+
+    let end = (scroll_offset + visible_rows).min(total);
+    let visible_slice = &app.library.filtered_indices[scroll_offset..end];
+
+    let items: Vec<ListItem> = visible_slice
         .iter()
         .enumerate()
-        .map(|(i, &track_idx)| {
+        .map(|(vis_i, &track_idx)| {
+            let global_i = scroll_offset + vis_i;
             let track = &app.library.tracks[track_idx];
-            let is_selected = i == app.library.selected_index;
+            let is_selected = global_i == sel;
 
             let prefix = if is_selected && is_focused {
                 "▶ "
@@ -215,10 +236,6 @@ fn render_library_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineThe
                     .fg(theme.highlight)
                     .bg(theme.highlight_bg)
                     .add_modifier(Modifier::BOLD)
-            } else if is_selected {
-                Style::default()
-                    .fg(theme.text)
-                    .bg(theme.surface)
             } else {
                 Style::default().fg(theme.text)
             };
@@ -230,7 +247,7 @@ fn render_library_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineThe
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_else(|| "Unknown".to_string())
             } else {
-                format!("{}", track.title)
+                track.title.clone()
             };
 
             let artist_text = if track.artist.is_empty() {
@@ -425,13 +442,34 @@ fn render_queue_panel(f: &mut Frame, app: &App, area: Rect, theme: &OpalineTheme
         return;
     }
 
-    let items: Vec<ListItem> = app
-        .playlist_manager
-        .queue
+    let visible_rows = (inner.height as usize).saturating_sub(2);
+    if visible_rows == 0 {
+        return;
+    }
+
+    let total = app.playlist_manager.queue.len();
+    let sel = app.playlist_manager.selected_queue_index;
+
+    let scroll_offset = if total <= visible_rows {
+        0
+    } else {
+        let half = visible_rows / 2;
+        if sel > half {
+            (sel - half).min(total - visible_rows)
+        } else {
+            0
+        }
+    };
+
+    let end = (scroll_offset + visible_rows).min(total);
+    let visible_slice = &app.playlist_manager.queue[scroll_offset..end];
+
+    let items: Vec<ListItem> = visible_slice
         .iter()
         .enumerate()
-        .map(|(i, entry)| {
-            let is_selected = i == app.playlist_manager.selected_queue_index && is_focused;
+        .map(|(vis_i, entry)| {
+            let global_i = scroll_offset + vis_i;
+            let is_selected = global_i == sel && is_focused;
 
             let style = if is_selected {
                 Style::default()
