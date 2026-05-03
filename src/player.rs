@@ -43,7 +43,10 @@ pub struct Player {
     play_start: Option<Instant>,
     accumulated_elapsed: Duration,
     seeking: bool,
-    last_seek_time: Option<Instant>,
+    /// Scrubbing: -1 rewinding, 0 idle, 1 fast-forwarding
+    pub scrub_direction: i8,
+    pub(crate) scrub_timer: f64,
+    pub(crate) scrub_interval: f64,
 }
 
 impl Player {
@@ -68,7 +71,9 @@ impl Player {
             play_start: None,
             accumulated_elapsed: Duration::ZERO,
             seeking: false,
-            last_seek_time: None,
+            scrub_direction: 0,
+            scrub_timer: 0.0,
+            scrub_interval: 0.1,
         })
     }
 
@@ -136,17 +141,6 @@ impl Player {
             return Ok(());
         };
 
-        // Enforce a cooldown between seeks so buffered key-repeat events
-        // (which many terminals report as Press, not Repeat) don't cause
-        // runaway seeks.
-        const SEEK_COOLDOWN: Duration = Duration::from_millis(150);
-        if let Some(last) = self.last_seek_time {
-            if last.elapsed() < SEEK_COOLDOWN {
-                return Ok(());
-            }
-        }
-        self.last_seek_time = Some(Instant::now());
-
         let was_playing = self.state == PlayState::Playing;
         self.seeking = true;
 
@@ -196,9 +190,27 @@ impl Player {
         self.accumulated_elapsed + running
     }
 
+    /// Called every frame to advance scrubbing. Returns the seek delta in
+    /// seconds if enough time has accumulated, or None.
+    pub fn scrub_tick(&mut self, dt: f64) -> Option<f64> {
+        if self.scrub_direction == 0 {
+            return None;
+        }
+        self.scrub_timer += dt;
+        if self.scrub_timer >= self.scrub_interval {
+            let steps = (self.scrub_timer / self.scrub_interval) as u32;
+            self.scrub_timer -= steps as f64 * self.scrub_interval;
+            // 2 seconds of seek per 100ms interval = 20x scrub speed
+            let delta = self.scrub_direction as f64 * steps as f64 * 2.0;
+            Some(delta)
+        } else {
+            None
+        }
+    }
+
     /// Returns true when the current track has finished playing naturally.
     pub fn is_finished(&self) -> bool {
-        if self.seeking || self.state != PlayState::Playing {
+        if self.seeking || self.scrub_direction != 0 || self.state != PlayState::Playing {
             return false;
         }
         // Check if the sink has drained (track played through)

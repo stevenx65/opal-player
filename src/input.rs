@@ -128,8 +128,7 @@ impl Keybindings {
         // Navigation
         bind!(KeyCode::Up, Action::MoveUp);
         bind!(KeyCode::Down, Action::MoveDown);
-        bind!(KeyCode::Left, Action::MoveLeft);
-        bind!(KeyCode::Right, Action::MoveRight);
+        // Left/Right arrows are handled directly for seek scrubbing
         bind!(KeyCode::PageUp, Action::PageUp);
         bind!(KeyCode::PageDown, Action::PageDown);
         bind!(KeyCode::Home, Action::Home);
@@ -148,10 +147,6 @@ impl Keybindings {
         bind!(KeyCode::Char('+'), Action::VolumeUp);
         bind!(KeyCode::Char('-'), Action::VolumeDown);
         bind!(KeyCode::Char('='), Action::VolumeUp);
-
-        // Seek
-        bind!(KeyCode::Left, Action::SeekBackward);
-        bind!(KeyCode::Right, Action::SeekForward);
 
         // Queue / Playlist
         bind!(KeyCode::Char('a'), Action::AddToQueue);

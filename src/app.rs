@@ -75,8 +75,49 @@ impl App {
     }
 
     pub fn handle_event(&mut self, event: &KeyEvent) -> Result<()> {
-        // Only respond to initial press, not key-repeat events.
-        // This prevents seek/volume from overshooting when a key is held.
+        // ── Arrow-key scrubbing: press to start, release to stop ──
+        match event.code {
+            KeyCode::Right => {
+                if event.kind == KeyEventKind::Press {
+                    self.player.scrub_direction = 1;
+                    self.player.scrub_timer = 0.0;
+                    return Ok(());
+                }
+                if event.kind == KeyEventKind::Release {
+                    // Tap (shorter than one scrub interval) → single 5s seek
+                    if self.player.scrub_direction == 1
+                        && self.player.scrub_timer < self.player.scrub_interval
+                    {
+                        self.player.seek(5.0)?;
+                    }
+                    self.player.scrub_direction = 0;
+                    self.player.scrub_timer = 0.0;
+                    return Ok(());
+                }
+                return Ok(());
+            }
+            KeyCode::Left => {
+                if event.kind == KeyEventKind::Press {
+                    self.player.scrub_direction = -1;
+                    self.player.scrub_timer = 0.0;
+                    return Ok(());
+                }
+                if event.kind == KeyEventKind::Release {
+                    if self.player.scrub_direction == -1
+                        && self.player.scrub_timer < self.player.scrub_interval
+                    {
+                        self.player.seek(-5.0)?;
+                    }
+                    self.player.scrub_direction = 0;
+                    self.player.scrub_timer = 0.0;
+                    return Ok(());
+                }
+                return Ok(());
+            }
+            _ => {}
+        }
+
+        // ── All other keys: press only ──
         if event.kind != KeyEventKind::Press {
             return Ok(());
         }
@@ -432,6 +473,11 @@ impl App {
     }
 
     pub fn tick(&mut self) {
+        // ── Scrub processing ──
+        if let Some(delta) = self.player.scrub_tick(0.016) {
+            let _ = self.player.seek(delta);
+        }
+
         // Decrement status timer
         if self.status_timer > 0 {
             self.status_timer -= 1;
