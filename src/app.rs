@@ -75,7 +75,9 @@ impl App {
     }
 
     pub fn handle_event(&mut self, event: &KeyEvent) -> Result<()> {
-        if event.kind == KeyEventKind::Release {
+        // Only respond to initial press, not key-repeat events.
+        // This prevents seek/volume from overshooting when a key is held.
+        if event.kind != KeyEventKind::Press {
             return Ok(());
         }
 
