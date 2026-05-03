@@ -75,51 +75,18 @@ impl App {
     }
 
     pub fn handle_event(&mut self, event: &KeyEvent) -> Result<()> {
-        // ── Arrow-key scrubbing: press to start, release to stop ──
-        match event.code {
-            KeyCode::Right => {
-                if event.kind == KeyEventKind::Press {
-                    self.player.scrub_direction = 1;
-                    self.player.scrub_timer = 0.0;
-                    return Ok(());
-                }
-                if event.kind == KeyEventKind::Release {
-                    // Tap (shorter than one scrub interval) → single 5s seek
-                    if self.player.scrub_direction == 1
-                        && self.player.scrub_timer < self.player.scrub_interval
-                    {
-                        self.player.seek(5.0)?;
-                    }
-                    self.player.scrub_direction = 0;
-                    self.player.scrub_timer = 0.0;
-                    return Ok(());
-                }
-                return Ok(());
-            }
-            KeyCode::Left => {
-                if event.kind == KeyEventKind::Press {
-                    self.player.scrub_direction = -1;
-                    self.player.scrub_timer = 0.0;
-                    return Ok(());
-                }
-                if event.kind == KeyEventKind::Release {
-                    if self.player.scrub_direction == -1
-                        && self.player.scrub_timer < self.player.scrub_interval
-                    {
-                        self.player.seek(-5.0)?;
-                    }
-                    self.player.scrub_direction = 0;
-                    self.player.scrub_timer = 0.0;
-                    return Ok(());
-                }
-                return Ok(());
-            }
-            _ => {}
-        }
-
-        // ── All other keys: press only ──
+        // Only respond to initial press — repeat events are ignored.
+        // The Player::seek guard prevents overlapping seeks, so buffered
+        // events are harmless no-ops.
         if event.kind != KeyEventKind::Press {
             return Ok(());
+        }
+
+        // Arrow keys handle seek directly (not via keybindings) for zero-latency response.
+        match event.code {
+            KeyCode::Right => return self.player.seek(5.0).map_err(Into::into),
+            KeyCode::Left => return self.player.seek(-5.0).map_err(Into::into),
+            _ => {}
         }
 
         if self.search_active {
@@ -204,14 +171,6 @@ impl App {
 
             Action::PrevTrack => {
                 self.play_previous()?;
-            }
-
-            Action::SeekForward => {
-                self.player.seek(5.0)?;
-            }
-
-            Action::SeekBackward => {
-                self.player.seek(-5.0)?;
             }
 
             Action::VolumeUp => self.player.change_volume(0.05),
@@ -473,11 +432,6 @@ impl App {
     }
 
     pub fn tick(&mut self) {
-        // ── Scrub processing ──
-        if let Some(delta) = self.player.scrub_tick(0.016) {
-            let _ = self.player.seek(delta);
-        }
-
         // Decrement status timer
         if self.status_timer > 0 {
             self.status_timer -= 1;

@@ -43,10 +43,6 @@ pub struct Player {
     play_start: Option<Instant>,
     accumulated_elapsed: Duration,
     seeking: bool,
-    /// Scrubbing: -1 rewinding, 0 idle, 1 fast-forwarding
-    pub scrub_direction: i8,
-    pub(crate) scrub_timer: f64,
-    pub(crate) scrub_interval: f64,
 }
 
 impl Player {
@@ -71,9 +67,6 @@ impl Player {
             play_start: None,
             accumulated_elapsed: Duration::ZERO,
             seeking: false,
-            scrub_direction: 0,
-            scrub_timer: 0.0,
-            scrub_interval: 0.1,
         })
     }
 
@@ -122,8 +115,10 @@ impl Player {
         self.total_duration = None;
     }
 
+    /// Single-step seek.  Ignored if a seek is already in progress or no
+    /// track is loaded, so buffered / repeat key events are harmless.
     pub fn seek(&mut self, delta_secs: f64) -> Result<()> {
-        if self.current_track.is_none() {
+        if self.seeking || self.current_track.is_none() {
             return Ok(());
         }
 
@@ -133,25 +128,17 @@ impl Player {
             .max(0.0)
             .min(total.as_secs_f64());
 
-        self.seek_absolute(new_pos_secs)
-    }
-
-    pub fn seek_absolute(&mut self, seconds: f64) -> Result<()> {
-        let Some(track) = &self.current_track else {
-            return Ok(());
-        };
-
-        let was_playing = self.state == PlayState::Playing;
         self.seeking = true;
 
-        let path = track.path.clone();
-        let source = SymphoniaSource::new_with_seek(&path, seconds)?;
+        let was_playing = self.state == PlayState::Playing;
+        let path = self.current_track.as_ref().unwrap().path.clone();
+        let source = SymphoniaSource::new_with_seek(&path, new_pos_secs)?;
 
         self.sink.stop();
         self.sink.append(source);
         self.sink.set_volume(if self.muted { 0.0 } else { self.volume });
 
-        self.accumulated_elapsed = Duration::from_secs_f64(seconds);
+        self.accumulated_elapsed = Duration::from_secs_f64(new_pos_secs);
         self.play_start = if was_playing { Some(Instant::now()) } else { None };
 
         if !was_playing {
@@ -190,34 +177,14 @@ impl Player {
         self.accumulated_elapsed + running
     }
 
-    /// Called every frame to advance scrubbing. Returns the seek delta in
-    /// seconds if enough time has accumulated, or None.
-    pub fn scrub_tick(&mut self, dt: f64) -> Option<f64> {
-        if self.scrub_direction == 0 {
-            return None;
-        }
-        self.scrub_timer += dt;
-        if self.scrub_timer >= self.scrub_interval {
-            let steps = (self.scrub_timer / self.scrub_interval) as u32;
-            self.scrub_timer -= steps as f64 * self.scrub_interval;
-            // 2 seconds of seek per 100ms interval = 20x scrub speed
-            let delta = self.scrub_direction as f64 * steps as f64 * 2.0;
-            Some(delta)
-        } else {
-            None
-        }
-    }
-
     /// Returns true when the current track has finished playing naturally.
     pub fn is_finished(&self) -> bool {
-        if self.seeking || self.scrub_direction != 0 || self.state != PlayState::Playing {
+        if self.seeking || self.state != PlayState::Playing {
             return false;
         }
-        // Check if the sink has drained (track played through)
         if self.sink.empty() {
             return true;
         }
-        // Also check if we've exceeded total duration as a safety net
         if let Some(total) = self.total_duration {
             if self.get_elapsed() >= total {
                 return true;
@@ -231,8 +198,8 @@ impl Player {
     }
 }
 
-/// A rodio::Source backed by symphonia decoding with optional seek support.
-/// Decodes the entire file into memory for simple, reliable playback.
+/// A rodio::Source backed by symphonia decoding.
+/// Decodes the entire file into memory for reliable, gapless playback.
 pub struct SymphoniaSource {
     channels: u16,
     sample_rate: u32,
@@ -247,17 +214,14 @@ impl SymphoniaSource {
     }
 
     pub fn new_with_seek(path: &Path, seek_seconds: f64) -> Result<Self> {
-        Self::decode(path, Some(seek_seconds))
+        Self::decode(path, Some(seek_seconds.max(0.0)))
     }
 
     fn decode(path: &Path, seek_to: Option<f64>) -> Result<Self> {
         let file = File::open(path)
             .with_context(|| format!("Cannot open file: {}", path.display()))?;
 
-        let mss = MediaSourceStream::new(
-            Box::new(file),
-            Default::default(),
-        );
+        let mss = MediaSourceStream::new(Box::new(file), Default::default());
 
         let mut hint = Hint::new();
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -281,7 +245,6 @@ impl SymphoniaSource {
         let channels = track.codec_params.channels.map(|c| c.count() as u16).unwrap_or(2);
         let codec_params = track.codec_params.clone();
 
-        // Duration from metadata
         let duration = track
             .codec_params
             .time_base
@@ -298,7 +261,6 @@ impl SymphoniaSource {
         )
         .map_err(|e| crate::error::AppError::Decode(e.to_string()))?;
 
-        // Decode the entire file into memory
         let mut all_samples = Vec::new();
 
         loop {
@@ -320,7 +282,7 @@ impl SymphoniaSource {
             all_samples.extend_from_slice(sample_buf.samples());
         }
 
-        // Calculate seek offset in samples (always decode full file, then skip)
+        // Seek via sample offset — decode entire file, then skip.
         let position = if let Some(seek_secs) = seek_to {
             if seek_secs > 0.0 {
                 let offset = (seek_secs * sample_rate as f64 * channels as f64) as usize;
