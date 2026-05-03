@@ -600,6 +600,9 @@ impl App {
         } else {
             state.metadata = MprisMetadata::default();
         }
+        drop(state);
+
+        self.mpris_shared.notify_state_changed();
     }
 
     fn poll_mpris_commands(&mut self) {

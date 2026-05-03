@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use zbus::zvariant::{ObjectPath, Value};
@@ -18,7 +19,7 @@ pub enum MprisAction {
 }
 
 /// Metadata snapshot shared between the main thread and MPRIS thread.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct MprisMetadata {
     pub track_id: String,
     pub title: String,
@@ -28,7 +29,7 @@ pub struct MprisMetadata {
 }
 
 /// Player state snapshot, updated by the main thread and read by MPRIS.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MprisState {
     pub playback_status: String,
     pub volume: f64,
@@ -42,6 +43,8 @@ pub struct MprisState {
 pub struct MprisShared {
     pub state: Mutex<MprisState>,
     pub commands: Mutex<Vec<MprisAction>>,
+    pub state_version: AtomicU64,
+    connection: Mutex<Option<zbus::Connection>>,
 }
 
 impl MprisShared {
@@ -56,16 +59,22 @@ impl MprisShared {
                 loop_status: "None".into(),
             }),
             commands: Mutex::new(Vec::new()),
+            state_version: AtomicU64::new(0),
+            connection: Mutex::new(None),
         }
     }
 
     fn push_command(&self, action: MprisAction) {
         self.commands.lock().unwrap().push(action);
     }
+
+    /// Called by the main thread after updating the state.
+    pub fn notify_state_changed(&self) {
+        self.state_version.fetch_add(1, Ordering::Release);
+    }
 }
 
-/// Generate a valid D-Bus object path segment from an arbitrary file path
-/// by using its hash.  Object paths only allow [A-Z][a-z][0-9]_/ characters.
+/// Generate a valid D-Bus object path segment from an arbitrary file path.
 pub fn track_id_from_path(path: &std::path::Path) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     path.hash(&mut hasher);
@@ -78,7 +87,7 @@ pub struct OpalMprisRoot {
     shared: Arc<MprisShared>,
 }
 
-#[zbus::dbus_interface(name ="org.mpris.MediaPlayer2")]
+#[zbus::dbus_interface(name = "org.mpris.MediaPlayer2")]
 impl OpalMprisRoot {
     #[dbus_interface(property)]
     fn can_quit(&self) -> bool {
@@ -131,7 +140,7 @@ pub struct OpalMprisPlayer {
     shared: Arc<MprisShared>,
 }
 
-#[zbus::dbus_interface(name ="org.mpris.MediaPlayer2.Player")]
+#[zbus::dbus_interface(name = "org.mpris.MediaPlayer2.Player")]
 impl OpalMprisPlayer {
     fn next(&self) {
         self.shared.push_command(MprisAction::Next);
@@ -209,35 +218,7 @@ impl OpalMprisPlayer {
     #[dbus_interface(property)]
     fn metadata(&self) -> HashMap<String, Value<'static>> {
         let state = self.shared.state.lock().unwrap();
-        let m = state.metadata.clone();
-        drop(state);
-
-        let mut map: HashMap<String, Value<'static>> = HashMap::new();
-
-        if !m.track_id.is_empty() {
-            let path = ObjectPath::from_str_unchecked(&m.track_id).into_owned();
-            map.insert("mpris:trackid".into(), Value::ObjectPath(path));
-        }
-
-        if !m.title.is_empty() {
-            map.insert("xesam:title".into(), Value::new(m.title));
-        }
-
-        if !m.artist.is_empty() {
-            let artists: Vec<Value<'static>> = m.artist.iter().map(|a| Value::new(a.clone())).collect();
-            map.insert("xesam:artist".into(), Value::new(artists));
-        }
-
-        if !m.album.is_empty() {
-            map.insert("xesam:album".into(), Value::new(m.album));
-        }
-
-        if m.length > 0 {
-            map.insert("mpris:length".into(), Value::new(m.length));
-            map.insert("mpris:artUrl".into(), Value::new(""));
-        }
-
-        map
+        build_metadata_dict(&state.metadata)
     }
 
     #[dbus_interface(property)]
@@ -287,9 +268,45 @@ impl OpalMprisPlayer {
     }
 }
 
+// ── Metadata helper ────────────────────────────────────────────────────
+
+fn build_metadata_dict(m: &MprisMetadata) -> HashMap<String, Value<'static>> {
+    let mut map: HashMap<String, Value<'static>> = HashMap::new();
+
+    if !m.track_id.is_empty() {
+        // Cloning into a String to get an owned ObjectPath<'static>
+        let owned = m.track_id.clone();
+        let path = ObjectPath::from_str_unchecked(&owned).into_owned();
+        map.insert("mpris:trackid".into(), Value::ObjectPath(path));
+    }
+
+    if !m.title.is_empty() {
+        map.insert("xesam:title".into(), Value::new(m.title.clone()));
+    }
+
+    if !m.artist.is_empty() {
+        let artists: Vec<Value<'static>> =
+            m.artist.iter().map(|a| Value::new(a.clone())).collect();
+        map.insert("xesam:artist".into(), Value::new(artists));
+    }
+
+    if !m.album.is_empty() {
+        map.insert("xesam:album".into(), Value::new(m.album.clone()));
+    }
+
+    if m.length > 0 {
+        map.insert("mpris:length".into(), Value::new(m.length));
+        map.insert("mpris:artUrl".into(), Value::new(""));
+    }
+
+    map
+}
+
 // ── Spawn entry ────────────────────────────────────────────────────────
 
 /// Starts the MPRIS D-Bus server in a background thread.
+/// Emits PropertiesChanged signals when state changes so desktop
+/// widgets (e.g. quickshell) can display track info in real time.
 pub fn start_mpris(shared: Arc<MprisShared>) {
     std::thread::Builder::new()
         .name("mpris".into())
@@ -300,6 +317,7 @@ pub fn start_mpris(shared: Arc<MprisShared>) {
                 .expect("build mpris tokio runtime");
 
             rt.block_on(async move {
+                // Build connection
                 let conn = match zbus::ConnectionBuilder::session() {
                     Ok(builder) => match builder.name("org.mpris.MediaPlayer2.opal") {
                         Ok(builder) => match builder.build().await {
@@ -323,7 +341,9 @@ pub fn start_mpris(shared: Arc<MprisShared>) {
                 let root = OpalMprisRoot {
                     shared: shared.clone(),
                 };
-                let player = OpalMprisPlayer { shared };
+                let player = OpalMprisPlayer {
+                    shared: shared.clone(),
+                };
 
                 let obj_path = "/org/mpris/MediaPlayer2";
                 if let Err(e) = conn.object_server().at(obj_path, root).await {
@@ -335,11 +355,50 @@ pub fn start_mpris(shared: Arc<MprisShared>) {
                     return;
                 }
 
+                // Store connection so we can emit signals from the polling loop
+                *shared.connection.lock().unwrap() = Some(conn.clone());
+
                 log_mpris("MPRIS server started");
 
-                // Keep alive
+                // Polling loop: watch for state changes and emit PropertiesChanged
+                let mut last_version: u64 = 0;
+                let iface = "org.mpris.MediaPlayer2.Player";
                 loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+
+                    let current_version = shared.state_version.load(Ordering::Acquire);
+                    if current_version == last_version {
+                        continue;
+                    }
+                    last_version = current_version;
+
+                    // Read current state snapshot
+                    let state = shared.state.lock().unwrap().clone();
+
+                    // Build changed properties dict
+                    let mut changed: HashMap<String, Value<'static>> = HashMap::new();
+                    changed.insert("PlaybackStatus".into(), Value::new(state.playback_status));
+                    changed.insert("LoopStatus".into(), Value::new(state.loop_status));
+                    changed.insert("Shuffle".into(), Value::new(state.shuffle));
+                    changed.insert("Volume".into(), Value::new(state.volume));
+                    changed.insert("Position".into(), Value::new(state.position));
+                    changed.insert("Metadata".into(), Value::new(build_metadata_dict(&state.metadata)));
+
+                    let invalidated: Vec<String> = vec![];
+
+                    let body = (iface.to_string(), changed, invalidated);
+                    if let Err(e) = conn
+                        .emit_signal(
+                            None::<&str>,
+                            obj_path,
+                            "org.freedesktop.DBus.Properties",
+                            "PropertiesChanged",
+                            &body,
+                        )
+                        .await
+                    {
+                        log_mpris(&format!("emit PropertiesChanged: {e}"));
+                    }
                 }
             });
         })
