@@ -1,5 +1,5 @@
 # Opaline Theme Configuration
-# Place this file at ~/.config/opal-tui/config.toml
+# Place this file at ~/.config/opal-player/config.toml
 # Colors are hex RGB values.
 
 [theme_overrides]

@@ -66,7 +66,7 @@ impl Config {
     pub fn config_path() -> anyhow::Result<PathBuf> {
         let dir = dirs::config_dir()
             .context("no config dir")?
-            .join("opal-tui");
+            .join("opal-player");
         std::fs::create_dir_all(&dir).ok();
         Ok(dir.join("config.toml"))
     }

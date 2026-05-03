@@ -101,12 +101,12 @@ impl OpalMprisRoot {
 
     #[dbus_interface(property)]
     fn identity(&self) -> &str {
-        "Opal TUI"
+        "Opal Player"
     }
 
     #[dbus_interface(property)]
     fn desktop_entry(&self) -> &str {
-        "opal-tui"
+        "opal-player"
     }
 
     #[dbus_interface(property)]

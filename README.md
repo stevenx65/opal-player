@@ -1,6 +1,6 @@
 <div align="center">
 
-# ♫ Opal TUI
+# ♫ Opal Player
 
 *A modern, minimal, fully-featured TUI music player — keyboard-driven, iridescent.*
 
@@ -8,7 +8,7 @@
 
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![AUR](https://img.shields.io/badge/AUR-opal--tui-blue)](https://aur.archlinux.org/packages/opal-tui)
+[![AUR](https://img.shields.io/badge/AUR-opal--player-blue)](https://aur.archlinux.org/packages/opal-player)
 
 </div>
 
@@ -129,24 +129,24 @@ sudo dnf install alsa-lib-devel
 **Arch Linux (AUR):**
 
 ```bash
-paru -S opal-tui
-# or: yay -S opal-tui
+paru -S opal-player
+# or: yay -S opal-player
 ```
 
 **From source:**
 
 ```bash
-git clone https://github.com/stevenx65/opal-tui.git
-cd opal-tui
+git clone https://github.com/stevenx65/opal-player.git
+cd opal-player
 cargo build --release
-./target/release/opal-tui
+./target/release/opal-player
 ```
 
 ### Configuration | 配置
 
-Config is auto-created at `~/.config/opal-tui/config.toml` on first run.
+Config is auto-created at `~/.config/opal-player/config.toml` on first run.
 
-首次运行后配置自动生成于 `~/.config/opal-tui/config.toml`。
+首次运行后配置自动生成于 `~/.config/opal-player/config.toml`。
 
 ```toml
 volume = 0.8
