@@ -4,6 +4,7 @@ mod error;
 mod input;
 mod library;
 mod lyrics;
+mod mpris;
 mod player;
 mod playlist;
 mod theme;
@@ -36,8 +37,12 @@ fn main() -> anyhow::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // MPRIS D-Bus integration (runs in background thread)
+    let mpris_shared = std::sync::Arc::new(crate::mpris::MprisShared::new());
+    crate::mpris::start_mpris(mpris_shared.clone());
+
     // Create app
-    let mut app = App::new()?;
+    let mut app = App::new(mpris_shared)?;
 
     // UI layout tracking (separate from app so terminal.draw can borrow both)
     let mut ui_layout = crate::app::UiLayout::default();

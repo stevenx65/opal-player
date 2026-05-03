@@ -26,6 +26,7 @@
 | ⚙️ Persistent config (volume, queue, theme, position) | 持久化配置（音量、队列、主题、播放位置） |
 | ⌨️ Full keyboard control with help popup (`?`) | 全键盘操作，`?` 弹出帮助 |
 | 🖱️ Mouse support — click tracks to play, drag progress bar | 鼠标支持 — 点击曲目播放，点击进度条跳转 |
+| 🔌 MPRIS D-Bus integration — media keys, desktop environments | MPRIS D-Bus 集成 — 多媒体键、桌面环境控制 |
 
 ## 🖼️ Screenshot | 截图
 
@@ -90,6 +91,19 @@
 | 点击队列中的条目 | 选中并播放队列中的曲目 |
 | Click progress bar | Seek to that position |
 | 点击进度条 | 跳转到对应播放位置 |
+
+## 🔌 MPRIS D-Bus | 桌面集成
+
+Opal TUI registers as `org.mpris.MediaPlayer2.opal` on the session bus, enabling:
+
+Opal TUI 在会话总线上注册为 `org.mpris.MediaPlayer2.opal`，支持：
+
+| Feature | 功能 |
+|---------|------|
+| Media keys (Play/Pause, Next, Prev, Stop) | 多媒体键控制（播放/暂停/上下曲/停止） |
+| Desktop environment now-playing widgets (KDE, GNOME) | 桌面环境播放状态小部件 |
+| Volume control / Seek via DE integrations | 音量 / 进度跳转（桌面环境集成） |
+| Show track metadata (title, artist, album) | 显示曲目元数据（标题、艺术家、专辑） |
 
 ## 🚀 Quick Start | 快速开始
 

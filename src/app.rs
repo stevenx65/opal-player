@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
@@ -8,6 +9,7 @@ use crate::error::Result;
 use crate::input::{Action, Keybindings};
 use crate::library::{MusicLibrary, TrackInfo};
 use crate::lyrics::Lyrics;
+use crate::mpris::{MprisAction, MprisMetadata, MprisShared};
 use crate::player::{Player, RepeatMode};
 use crate::playlist::PlaylistManager;
 use crate::theme::OpalineTheme;
@@ -66,10 +68,11 @@ pub struct App {
     pub status_msg: String,
     pub status_timer: i32,
     pub cursor_timer: u32,
+    pub mpris_shared: Arc<MprisShared>,
 }
 
 impl App {
-    pub fn new() -> Result<Self> {
+    pub fn new(mpris_shared: Arc<MprisShared>) -> Result<Self> {
         let config = Config::load().unwrap_or_default();
         let theme = config.theme();
         let mut player = Player::new()?;
@@ -93,6 +96,7 @@ impl App {
             status_msg: String::new(),
             status_timer: 0,
             cursor_timer: 0,
+            mpris_shared,
         })
     }
 
@@ -550,6 +554,96 @@ impl App {
         // Check if current track finished
         if self.player.is_finished() {
             let _ = self.play_next();
+        }
+
+        // Sync player state → MPRIS
+        self.update_mpris_state();
+
+        // Process MPRIS commands from external sources (media keys, desktop)
+        self.poll_mpris_commands();
+    }
+
+    fn update_mpris_state(&self) {
+        let mut state = self.mpris_shared.state.lock().unwrap();
+
+        state.playback_status = match self.player.state {
+            crate::player::PlayState::Playing => "Playing".into(),
+            crate::player::PlayState::Paused => "Paused".into(),
+            crate::player::PlayState::Stopped => "Stopped".into(),
+        };
+
+        state.volume = self.player.volume as f64;
+        state.position = self.player.get_elapsed().as_micros() as i64;
+        state.shuffle = self.player.shuffle;
+
+        state.loop_status = match self.player.repeat_mode {
+            RepeatMode::Off => "None".into(),
+            RepeatMode::Playlist => "Playlist".into(),
+            RepeatMode::Track => "Track".into(),
+        };
+
+        if let Some(track) = &self.player.current_track {
+            state.metadata.track_id = format!(
+                "/org/mpris/MediaPlayer2/opal/{}",
+                track.path.to_string_lossy()
+            );
+            state.metadata.title = track.title.clone();
+            state.metadata.artist = if track.artist.is_empty() {
+                vec![]
+            } else {
+                vec![track.artist.clone()]
+            };
+            state.metadata.album = track.album.clone();
+            state.metadata.length = track
+                .duration
+                .or(self.player.total_duration)
+                .map(|d| d.as_micros() as i64)
+                .unwrap_or(0);
+        } else {
+            state.metadata = MprisMetadata::default();
+        }
+    }
+
+    fn poll_mpris_commands(&mut self) {
+        // Collect commands in a scoped block so the Mutex lock is released
+        // before we call &mut self methods below.
+        let cmds: Vec<MprisAction> = {
+            let mut guard = self.mpris_shared.commands.lock().unwrap();
+            if guard.is_empty() {
+                return;
+            }
+            guard.drain(..).collect()
+        };
+
+        for cmd in cmds {
+            match cmd {
+                MprisAction::PlayPause => self.player.play_pause(),
+                MprisAction::Next => {
+                    let _ = self.play_next();
+                }
+                MprisAction::Previous => {
+                    let _ = self.play_previous();
+                }
+                MprisAction::Stop => {
+                    self.player.stop();
+                    self.lyrics = None;
+                }
+                MprisAction::Seek(offset) => {
+                    let delta = offset as f64 / 1_000_000.0;
+                    let _ = self.player.seek(delta);
+                }
+                MprisAction::SetPosition(pos) => {
+                    let target = pos as f64 / 1_000_000.0;
+                    let _ = self.player.seek_to(target);
+                }
+                MprisAction::SetVolume(v) => {
+                    self.player.set_volume(v as f32);
+                }
+                MprisAction::Quit => {
+                    self.save_state();
+                    self.running = false;
+                }
+            }
         }
     }
 
