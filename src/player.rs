@@ -43,6 +43,7 @@ pub struct Player {
     play_start: Option<Instant>,
     accumulated_elapsed: Duration,
     seeking: bool,
+    last_seek_time: Option<Instant>,
 }
 
 impl Player {
@@ -67,6 +68,7 @@ impl Player {
             play_start: None,
             accumulated_elapsed: Duration::ZERO,
             seeking: false,
+            last_seek_time: None,
         })
     }
 
@@ -133,6 +135,17 @@ impl Player {
         let Some(track) = &self.current_track else {
             return Ok(());
         };
+
+        // Enforce a cooldown between seeks so buffered key-repeat events
+        // (which many terminals report as Press, not Repeat) don't cause
+        // runaway seeks.
+        const SEEK_COOLDOWN: Duration = Duration::from_millis(150);
+        if let Some(last) = self.last_seek_time {
+            if last.elapsed() < SEEK_COOLDOWN {
+                return Ok(());
+            }
+        }
+        self.last_seek_time = Some(Instant::now());
 
         let was_playing = self.state == PlayState::Playing;
         self.seeking = true;
