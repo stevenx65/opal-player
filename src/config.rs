@@ -21,6 +21,8 @@ pub struct Config {
     pub recent_files: Vec<String>,
     #[serde(default)]
     pub last_playlist: Option<String>,
+    #[serde(default = "default_theme_preset")]
+    pub theme_preset: String,
     #[serde(default = "default_theme_overrides")]
     pub theme_overrides: HashMap<String, String>,
     #[serde(default)]
@@ -36,6 +38,10 @@ pub enum RepeatModeConfig {
     Off,
     Playlist,
     Track,
+}
+
+fn default_theme_preset() -> String {
+    "opaline".to_string()
 }
 
 fn default_theme_overrides() -> HashMap<String, String> {
@@ -55,6 +61,7 @@ impl Default for Config {
                 .to_string()],
             recent_files: Vec::new(),
             last_playlist: None,
+            theme_preset: default_theme_preset(),
             theme_overrides: default_theme_overrides(),
             keybindings: HashMap::new(),
             scan_on_startup: true,
@@ -89,6 +96,6 @@ impl Config {
     }
 
     pub fn theme(&self) -> OpalineTheme {
-        OpalineTheme::from_config(&self.theme_overrides)
+        OpalineTheme::from_config(&self.theme_preset, &self.theme_overrides)
     }
 }

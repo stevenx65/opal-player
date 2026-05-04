@@ -155,11 +155,12 @@ volume = 0.8
 shuffle = false
 repeat_mode = "off"
 music_dirs = ["~/Music"]
+theme_preset = "opaline"  # opaline | catppuccin | nord | dracula | one_dark
 
 [theme_overrides]
 primary = "f0c0c0"
 secondary = "b4f9f8"
-# ... customize any color from the opaline palette
+# ... customize any color from the preset palette
 ```
 
 ## 🏗️ Architecture | 架构
