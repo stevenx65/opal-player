@@ -92,6 +92,8 @@
 | 点击队列中的条目 | 选中并播放队列中的曲目 |
 | Click progress bar | Seek to that position |
 | 点击进度条 | 跳转到对应播放位置 |
+| Scroll wheel in Library / Queue | Move cursor up / down |
+| 在库/队列中滚动滚轮 | 上下移动光标 |
 
 ## 🔌 MPRIS D-Bus | 桌面集成
 

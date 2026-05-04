@@ -127,11 +127,43 @@ impl App {
     }
 
     pub fn handle_mouse(&mut self, event: MouseEvent, layout: &UiLayout) -> Result<()> {
+        let (col, row) = (event.column, event.row);
+
+        // ── Scroll wheel: move cursor without playing ──
+        match event.kind {
+            MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
+                let delta: i32 = if event.kind == MouseEventKind::ScrollDown { 1 } else { -1 };
+
+                let lib = layout.library_list;
+                if col >= lib.x && col < lib.x + lib.width && row >= lib.y && row < lib.y + lib.height {
+                    self.focused_panel = FocusedPanel::Library;
+                    let total = self.library.filtered_indices.len();
+                    if total > 0 {
+                        let new = (self.library.selected_index as i32 + delta).clamp(0, total as i32 - 1) as usize;
+                        self.library.selected_index = new;
+                    }
+                    return Ok(());
+                }
+
+                let q = layout.queue_list;
+                if col >= q.x && col < q.x + q.width && row >= q.y && row < q.y + q.height {
+                    self.focused_panel = FocusedPanel::Queue;
+                    let total = self.playlist_manager.queue.len();
+                    if total > 0 {
+                        let new = (self.playlist_manager.selected_queue_index as i32 + delta).clamp(0, total as i32 - 1) as usize;
+                        self.playlist_manager.selected_queue_index = new;
+                    }
+                    return Ok(());
+                }
+
+                return Ok(());
+            }
+            _ => {}
+        }
+
         if event.kind != MouseEventKind::Down(MouseButton::Left) {
             return Ok(());
         }
-
-        let (col, row) = (event.column, event.row);
 
         // ── Progress bar click → seek ──
         let pb = layout.progress_bar;
