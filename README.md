@@ -23,7 +23,6 @@
 | 📋 Playlist management (create, save/load M3U) | 播放列表管理（创建、保存/加载 M3U） |
 | 🔍 Real-time search/filter by title, artist, album | 实时搜索/过滤（按标题、艺术家、专辑） |
 | 🎤 Synchronized lyrics (.lrc) display | 同步歌词显示（.lrc 文件） |
-| 🎨 Opaline theme engine — soft pastel-on-dark palette | Opaline 主题引擎 — 柔和蛋白石配色 |
 | ⚙️ Persistent config (volume, queue, theme, position) | 持久化配置（音量、队列、主题、播放位置） |
 | ⌨️ Full keyboard control with help popup (`?`) | 全键盘操作，`?` 弹出帮助 |
 | 🖱️ Mouse support — click tracks to play, drag progress bar | 鼠标支持 — 点击曲目播放，点击进度条跳转 |
