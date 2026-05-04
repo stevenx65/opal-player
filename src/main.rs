@@ -49,11 +49,14 @@ fn main() -> anyhow::Result<()> {
 
     // If music dirs are configured, scan them
     let music_dirs: Vec<String> = app.config.music_dirs.clone();
+    let mut first_dir = true;
     for dir in &music_dirs {
         let path = Path::new(dir);
         if path.exists() {
-            // We can't await async in non-async context, so we run a sync scan
-            // For large libraries, this would be async
+            if first_dir {
+                app.library.current_dir = path.to_path_buf();
+                first_dir = false;
+            }
             if let Err(e) = poll_scan(&mut app, path) {
                 app.status_msg = format!("Scan error: {}", e);
                 app.status_timer = 120;
@@ -109,8 +112,6 @@ fn main() -> anyhow::Result<()> {
 
 /// Synchronous directory scan (for simplicity).
 fn poll_scan(app: &mut App, path: &Path) -> anyhow::Result<()> {
-    // We run a simple blocking scan here.
-    // In a full async implementation, this would use tokio::spawn.
     let mut tracks = Vec::new();
     scan_dir(path, &mut tracks)?;
 
