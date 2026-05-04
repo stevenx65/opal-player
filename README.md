@@ -2,9 +2,9 @@
 
 # ♫ Opal Player
 
-*A modern, minimal, fully-featured TUI music player — keyboard-driven, iridescent.*
+*A modern, minimal, fully-featured TUI music player*
 
-一个现代、极简、功能完整的终端音乐播放器 — 纯键盘驱动，蛋白石配色。
+一个现代、极简、功能完整的终端音乐播放器
 
 [![Rust](https://img.shields.io/badge/rust-stable-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
