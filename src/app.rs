@@ -78,6 +78,13 @@ impl App {
         let mut player = Player::new()?;
         let vol = config.volume;
         player.set_volume(vol);
+        player.shuffle = config.shuffle;
+        player.muted = config.muted;
+        player.repeat_mode = match config.repeat_mode {
+            crate::config::RepeatModeConfig::Off => RepeatMode::Off,
+            crate::config::RepeatModeConfig::Playlist => RepeatMode::Playlist,
+            crate::config::RepeatModeConfig::Track => RepeatMode::Track,
+        };
 
         Ok(Self {
             player,

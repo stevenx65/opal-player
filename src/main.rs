@@ -49,14 +49,12 @@ fn main() -> anyhow::Result<()> {
 
     // If music dirs are configured, scan them
     let music_dirs: Vec<String> = app.config.music_dirs.clone();
-    let mut first_dir = true;
+    if let Some(dir) = music_dirs.first() {
+        app.library.current_dir = Path::new(dir).to_path_buf();
+    }
     for dir in &music_dirs {
         let path = Path::new(dir);
         if path.exists() {
-            if first_dir {
-                app.library.current_dir = path.to_path_buf();
-                first_dir = false;
-            }
             if let Err(e) = poll_scan(&mut app, path) {
                 app.status_msg = format!("Scan error: {}", e);
                 app.status_timer = 120;
