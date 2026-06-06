@@ -1,6 +1,6 @@
 <div align="center">
 
-[中文版本](./README.zh.md)
+[Chinese version](./README.zh.md)
 
 # ♫ Opal Player
 
