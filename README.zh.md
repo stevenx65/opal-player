@@ -106,7 +106,7 @@ Opal TUI 在会话总线上注册为 `org.mpris.MediaPlayer2.opal`，支持：
 ### 前置条件
 
 - **Rust** stable (1.70+)
-- **ALSA** development libraries (Linux only)
+- **ALSA** 开发库（仅 Linux）
 
 ```bash
 # Debian/Ubuntu
@@ -128,7 +128,7 @@ paru -S opal-player
 # or: yay -S opal-player
 ```
 
-**From source:**
+**从源码构建：**
 
 ```bash
 git clone https://github.com/stevenx65/opal-player.git
@@ -175,14 +175,14 @@ src/
 
 | 组件 | Crate |
 |------|-------|
-| TUI | `ratatui` + `crossterm` |
-| Async | `tokio` |
-| Audio output | `rodio` |
-| Audio decoding | `symphonia` (all formats) |
-| Metadata | `lofty` |
-| Config | `serde` + `toml` |
-| Error handling | `thiserror` + `anyhow` |
+| 终端界面 | `ratatui` + `crossterm` |
+| 异步 | `tokio` |
+| 音频输出 | `rodio` |
+| 音频解码 | `symphonia`（所有格式） |
+| 元数据 | `lofty` |
+| 配置 | `serde` + `toml` |
+| 错误处理 | `thiserror` + `anyhow` |
 
-## 📄 License
+## 📄 许可协议
 
 MIT © 2026 [stevenx65](https://github.com/stevenx65)
